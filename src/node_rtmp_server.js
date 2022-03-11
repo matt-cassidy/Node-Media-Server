@@ -40,6 +40,10 @@ class NodeRtmpServer {
     }
   }
 
+  on(eventName, listener) {
+    context.nodeEvent.on(eventName, listener);
+  }
+
   run() {
     this.tcpServer.listen(this.port, () => {
       Logger.log(`Node Media Rtmp Server started on port: ${this.port}`);

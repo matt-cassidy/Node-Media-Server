@@ -165,10 +165,12 @@ class NodeRtmpSession {
     this.streams = 0;
 
     this.playStreamId = 0;
+    this.playStreamName = '';
     this.playStreamPath = '';
     this.playArgs = {};
 
     this.publishStreamId = 0;
+    this.publishStreamName = ''
     this.publishStreamPath = '';
     this.publishArgs = {};
 
@@ -804,6 +806,8 @@ class NodeRtmpSession {
     let dataMessage = AMF.decodeAmf0Data(payload);
     switch (dataMessage.cmd) {
       case '@setDataFrame':
+        context.nodeEvent.emit('onMetaData', this.id, this.publishStreamPath, dataMessage);
+
         if (dataMessage.dataObj) {
           this.audioSamplerate = dataMessage.dataObj.audiosamplerate;
           this.audioChannels = dataMessage.dataObj.stereo ? 2 : 1;
@@ -1045,20 +1049,24 @@ class NodeRtmpSession {
     this.respondCreateStream(invokeMessage.transId);
   }
 
-  onPublish(invokeMessage) {
+  async onPublish(invokeMessage) {
     if (typeof invokeMessage.streamName !== 'string') {
       return;
     }
-    this.publishStreamPath = '/' + this.appname + '/' + invokeMessage.streamName.split('?')[0];
-    this.publishArgs = QueryString.parse(invokeMessage.streamName.split('?')[1]);
+
+    let [name, params] = invokeMessage.streamName.split('?')
+
+    this.publishStreamName = name;
+    this.publishStreamPath = '/' + this.appname + '/' + name;
+    this.publishArgs = QueryString.parse(params);
     this.publishStreamId = this.parserPacket.header.stream_id;
     context.nodeEvent.emit('prePublish', this.id, this.publishStreamPath, this.publishArgs);
     if (!this.isStarting) {
       return;
     }
 
-    if (this.config.auth && this.config.auth.publish && !this.isLocal) {
-      let results = NodeCoreUtils.verifyAuth(this.publishArgs.sign, this.publishStreamPath, this.config.auth.secret);
+    if (this.config.auth && this.config.auth.publish) {
+      let results = await this.verifyPublishStream();
       if (!results) {
         Logger.log(`[rtmp publish] Unauthorized. id=${this.id} streamPath=${this.publishStreamPath} streamId=${this.publishStreamId} sign=${this.publishArgs.sign} `);
         this.sendStatusMessage(this.publishStreamId, 'error', 'NetStream.publish.Unauthorized', 'Authorization required.');
@@ -1090,12 +1098,14 @@ class NodeRtmpSession {
     }
   }
 
-  onPlay(invokeMessage) {
+  async onPlay(invokeMessage) {
     if (typeof invokeMessage.streamName !== 'string') {
       return;
     }
-    this.playStreamPath = '/' + this.appname + '/' + invokeMessage.streamName.split('?')[0];
-    this.playArgs = QueryString.parse(invokeMessage.streamName.split('?')[1]);
+    let [name, params] = invokeMessage.streamName.split('?')
+    this.playStreamName = name
+    this.playStreamPath = '/' + this.appname + '/' + name;
+    this.playArgs = QueryString.parse(params);
     this.playStreamId = this.parserPacket.header.stream_id;
     context.nodeEvent.emit('prePlay', this.id, this.playStreamPath, this.playArgs);
 
@@ -1103,8 +1113,8 @@ class NodeRtmpSession {
       return;
     }
 
-    if (this.config.auth && this.config.auth.play && !this.isLocal) {
-      let results = NodeCoreUtils.verifyAuth(this.playArgs.sign, this.playStreamPath, this.config.auth.secret);
+    if (this.config.auth && this.config.auth.play) {
+      let results = await this.verifyPlayStream()
       if (!results) {
         Logger.log(`[rtmp play] Unauthorized. id=${this.id} streamPath=${this.playStreamPath}  streamId=${this.playStreamId} sign=${this.playArgs.sign}`);
         this.sendStatusMessage(this.playStreamId, 'error', 'NetStream.play.Unauthorized', 'Authorization required.');
@@ -1303,6 +1313,26 @@ class NodeRtmpSession {
       }
       this.publishStreamId = 0;
       this.publishStreamPath = '';
+    }
+  }
+
+  async verifyPublishStream(){
+    if (this.config.auth && this.config.auth.publishHandler) {
+      return this.config.auth.publishHandler({id: this.id, name: this.publishStreamName, path: this.publishStreamPath, args: this.publishArgs});
+    } else if (!this.isLocal) {
+      return NodeCoreUtils.verifyAuth(this.publishArgs.sign, this.publishStreamPath, this.config.auth.secret);
+    } else {
+      return true;
+    }
+  }
+
+  async verifyPlayStream() {
+    if (this.config.auth && this.config.auth.playHandler) {
+      return this.config.auth.playHandler({id: this.id, name: this.playStreamName, path: this.playStreamPath, args: this.playArgs});
+    } else if (!this.isLocal) {
+      return NodeCoreUtils.verifyAuth(this.playArgs.sign, this.playStreamPath, this.config.auth.secret);
+    } else {
+      return true;
     }
   }
 }
