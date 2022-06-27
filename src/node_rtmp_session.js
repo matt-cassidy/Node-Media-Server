@@ -1335,7 +1335,7 @@ class NodeRtmpSession {
 
   async verifyPublishStream(){
     if (this.config.auth && this.config.auth.publishHandler) {
-      return this.config.auth.publishHandler({id: this.id, name: this.publishStreamName, path: this.publishStreamPath, args: this.publishArgs});
+      return this.config.auth.publishHandler({id: this.id, name: this.publishStreamName, path: this.publishStreamPath, args: this.publishArgs, session: this});
     } else if (!this.isLocal) {
       return NodeCoreUtils.verifyAuth(this.publishArgs.sign, this.publishStreamPath, this.config.auth.secret);
     } else {
@@ -1345,7 +1345,7 @@ class NodeRtmpSession {
 
   async verifyPlayStream() {
     if (this.config.auth && this.config.auth.playHandler) {
-      return this.config.auth.playHandler({id: this.id, name: this.playStreamName, path: this.playStreamPath, args: this.playArgs});
+      return this.config.auth.playHandler({id: this.id, name: this.playStreamName, path: this.playStreamPath, args: this.playArgs, session: this});
     } else if (!this.isLocal) {
       return NodeCoreUtils.verifyAuth(this.playArgs.sign, this.playStreamPath, this.config.auth.secret);
     } else {
